@@ -8,7 +8,7 @@ export type Node = { nodeId: number; pubKey: string; privateKey: string };
 export type RegisterNodeBody = {
   nodeId: number;
   pubKey: string;
-  privateKey: string;
+  privKey:string;
 };
 
 export type GetNodeRegistryBody = {
@@ -16,10 +16,11 @@ export type GetNodeRegistryBody = {
 };
 
 const registeredNodes: RegisterNodeBody[] = [];
+const privateKeys: Map<number, string> = new Map();
+
 type Payload = {
   result: string; // La chaîne est la version base64 de la clé privée
 };
-
 
 export async function launchRegistry() {
   const _registry = express();
@@ -32,36 +33,30 @@ export async function launchRegistry() {
   });
 
   _registry.post("/registerNode", (req: Request, res: Response) => {
-    const { nodeId, pubKey, privateKey }: RegisterNodeBody = req.body;
+    const { nodeId, pubKey, privKey }: RegisterNodeBody = req.body;
   
-    // Vérifier si le nœud est déjà enregistré
     if (registeredNodes.some((node) => node.nodeId === nodeId)) {
       return res.status(400).json({ message: "Node already registered" });
     }
   
-    // Ajouter le nœud à la liste
-    registeredNodes.push({ nodeId, pubKey, privateKey });
+    registeredNodes.push({ nodeId, pubKey ,privKey});
+    privateKeys.set(nodeId, privKey); // Store the private key
   
-    // Retourner une réponse de succès
     return res.status(201).json({ message: "Node registered successfully" });
   });
-  
 
-  // Permettre de récupérer la clé privée d'un nœud spécifique
   _registry.get("/getPrivateKey", (req: Request, res: Response) => {
-    const nodeId = Number(req.query.nodeId);  // Récupérer l'ID du nœud depuis les paramètres de la requête
-    const node = registeredNodes.find((n) => n.nodeId === nodeId);  // Chercher le nœud par son ID
+    const nodeId = Number(req.query.nodeId);
+    const privateKey = privateKeys.get(nodeId);
   
-    if (node) {
-      // Si le nœud est trouvé, encoder la clé privée en base64 et la renvoyer dans le payload
-      const base64PrivateKey = Buffer.from(node.privateKey).toString('base64');
-      return res.json({ result: base64PrivateKey });  // Réponse avec le format attendu
+    if (privateKey) {
+      const base64PrivateKey = Buffer.from(privateKey, 'base64').toString('base64');
+      return res.json({ result: base64PrivateKey });
     } else {
-      // Si le nœud n'est pas trouvé, retourner une erreur 404
       return res.status(404).json({ message: "Node not found" });
     }
   });
-  // Récupérer la liste des nœuds avec seulement leur ID et clé publique
+
   _registry.get("/getNodeRegistry", (req: Request, res: Response) => {
     const response: GetNodeRegistryBody = {
       nodes: registeredNodes.map(({ nodeId, pubKey }) => ({ nodeId, pubKey })),
